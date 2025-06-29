@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ตารางอัปเดตการส่งงาน</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: #333;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">
+            การพัฒนาหลักสูตรเพิ่มเติม<br>โปรเจกต์เปิดใจ ก้าวไปสู่นวัตกร<br>โรงเรียนคลองขวาง
+        </h1>
+
+        <div class="mb-4 space-y-2">
+            <input type="text" id="globalSearch" placeholder="ค้นหาครูผู้สอนหรือโปรเจกต์..." class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-200 rounded-lg">
+                <thead id="tableHeader" class="text-left uppercase text-sm leading-normal">
+                    <!-- Headers will be generated dynamically here -->
+                </thead>
+                <tbody id="dataTableBody" class="text-gray-700 text-sm font-light">
+                    <!-- Data will be loaded here from Google Sheets -->
+                    <tr>
+                        <td colspan="100%" class="text-center py-8 text-gray-500">กำลังโหลดข้อมูล...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- The Modal -->
+    <div id="suggestionModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h2 class="text-xl font-bold mb-4 text-center">ข้อเสนอแนะ</h2>
+            <p id="suggestionText" class="text-gray-700"></p>
+        </div>
+    </div>
+
+    <script>
+        // Set your Google Sheet published URL here (must be published as CSV)
+        // Ensure your Google Sheet has columns like:
+        // "รายการ X (ชื่อรายการย่อย)" for status (e.g., "50% ปรับปรุง")
+        // "ข้อเสนอแนะ X (ชื่อรายการย่อย)" for specific suggestion (e.g., "ทบทวนแผนงาน")
+        // And "วันที่อัพเดต" for the last updated date.
+        const googleSheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTMKtUIw-hn0S9r9RFhPP1qbtN_Ek0T4HSWmGucP-d07tIKyNoOBtkHa8iKDABgME4OZmyXDi7xWbcA/pub?output=csv';
+
+        // Array of Tailwind CSS background and text color classes for headers
+        const headerColorClasses = [
+            { bg: 'bg-blue-200', text: 'text-blue-800' },
+            { bg: 'bg-green-200', text: 'text-green-800' },
+            { bg: 'bg-yellow-200', text: 'text-yellow-800' },
+            { bg: 'bg-red-200', text: 'text-red-800' },
+            { bg: 'bg-purple-200', text: 'text-purple-800' },
+            { bg: 'bg-pink-200', text: 'text-pink-800' },
+            { bg: 'bg-indigo-200', text: 'text-indigo-800' }
+        ];
+
+        let tableData = []; // Store the fetched data globally
+        let tableHeaders = []; // Store headers globally
+
+        // Function to parse CSV data
+        function parseCSV(csv) {
+            const lines = csv.split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].trim();
+                if (currentLine === '') continue;
+
+                const values = currentLine.split(',');
+                const row = {};
+                for (let j = 0; j < headers.length; j++) {
+                    row[headers[j]] = values[j] ? values[j].trim() : '';
+                }
+                data.push(row);
+            }
+            return { headers, data };
+        }
+
+        // Function to extract percentage from an item string (e.g., "50% ปรับปรุง" -> 50)
+        function getPercentageFromItemString(itemString) {
+            const match = itemString.match(/(\d+)%/);
+            return match ? parseInt(match[1]) : null;
+        }
+
+        // Function to extract status (e.g., "ปรับปรุง") from item string
+        function getStatusFromItemString(itemString) {
+            const match = itemString.match(/\d+%\s*([^)]*)/); // Match digits%, then optional space and any text until end of string/parenthesis
+            return match && match[1] ? match[1].trim() : '';
+        }
+
+        // Function to calculate average percentage from multiple item columns
+        function calculateAveragePercentage(rowData, headers) {
+            let totalPercentage = 0;
+            let itemCount = 0;
+
+            headers.forEach(header => {
+                if (header.startsWith('รายการ ')) {
+                    const itemValue = rowData[header];
+                    // Only count items that are not empty for average calculation
+                    if (itemValue !== '') {
+                        const percentage = getPercentageFromItemString(itemValue);
+                        if (percentage !== null) {
+                            totalPercentage += percentage;
+                            itemCount++;
+                        } else {
+                            // If itemValue is not empty but no percentage found, treat as 0%
+                            totalPercentage += 0;
+                            itemCount++;
+                        }
+                    }
+                }
+            });
+            return itemCount > 0 ? parseFloat((totalPercentage / itemCount).toFixed(2)) : 0; // Return float for sorting
+        }
+
+        // Function to render table headers
+        function renderTableHeaders(headers) {
+            const tableHeader = document.getElementById('tableHeader');
+            tableHeader.innerHTML = '';
+            const tr = document.createElement('tr');
+
+            let colorIndex = 0; 
+
+            // Static headers
+            const staticHeaders = ['ที่', 'ครูผู้สอน', 'โปรเจกต์', 'รายการ', 'ความสำเร็จ', 'วันที่อัพเดต'];
+            staticHeaders.forEach((headerText, index) => {
+                const th = document.createElement('th');
+                const color = headerColorClasses[colorIndex % headerColorClasses.length];
+                th.className = `py-3 px-6 border-b border-gray-200 ${color.bg} ${color.text} text-center`;
+                
+                if (headerText === 'ที่') {
+                    th.classList.add('w-16');
+                    th.classList.remove('px-6');
+                    th.classList.add('px-2');
+                }
+
+                if (index === staticHeaders.length - 1) {
+                    th.classList.add('rounded-tr-lg');
+                } else if (index === 0) {
+                    th.classList.add('rounded-tl-lg');
+                }
+
+                th.textContent = headerText;
+                tr.appendChild(th);
+                colorIndex++;
+            });
+
+            tableHeader.appendChild(tr);
+        }
+
+        // Function to render table rows
+        function renderTableRows(dataToRender, allHeaders) { 
+            const dataTableBody = document.getElementById('dataTableBody');
+            dataTableBody.innerHTML = ''; 
+
+            if (dataToRender.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                const totalColSpan = 6; 
+                td.colSpan = totalColSpan; 
+                td.className = 'text-center py-8 text-gray-500';
+                td.textContent = 'ไม่พบข้อมูล';
+                tr.appendChild(td);
+                dataTableBody.appendChild(tr);
+                return;
+            }
+
+            dataToRender.forEach((rowData, index) => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-200 hover:bg-gray-50';
+
+                // Column: ที่ (Sequential numbering)
+                const tdIndex = document.createElement('td');
+                tdIndex.className = 'py-3 px-2 text-center';
+                tdIndex.textContent = index + 1;
+                row.appendChild(tdIndex);
+
+                // Column: ชื่อ-สกุล (Now ครูผู้สอน)
+                const tdName = document.createElement('td');
+                tdName.className = 'py-3 px-6';
+                tdName.textContent = rowData['ชื่อ-สกุล'] || '';
+                row.appendChild(tdName);
+
+                // Column: โปรเจกต์
+                const tdProject = document.createElement('td');
+                tdProject.className = 'py-3 px-6';
+                tdProject.textContent = rowData['โปรเจกต์'] || '';
+                row.appendChild(tdProject);
+
+                // Column: รายการ (Combined List)
+                const tdItemsList = document.createElement('td');
+                tdItemsList.className = 'py-3 px-6';
+                const ol = document.createElement('ol');
+                ol.className = 'list-decimal list-inside space-y-1';
+
+                const itemBaseHeaders = allHeaders.filter(key => key.startsWith('รายการ '));
+                itemBaseHeaders.sort((a, b) => {
+                    const numA = parseInt(a.replace('รายการ ', ''));
+                    const numB = parseInt(b.replace('รายการ ', ''));
+                    return numA - numB;
+                });
+
+                itemBaseHeaders.forEach(itemKey => {
+                    let itemValue = rowData[itemKey] || ''; 
+                    const suggestionKey = itemKey.replace('รายการ ', 'ข้อเสนอแนะ ');
+                    const specificSuggestion = rowData[suggestionKey] || ''; 
+
+                    let percentage = getPercentageFromItemString(itemValue);
+                    let status = getStatusFromItemString(itemValue);
+
+                    // If itemValue is empty, treat it as 0%
+                    if (itemValue === '') {
+                        percentage = 0;
+                        status = '';
+                    }
+
+                    const li = document.createElement('li');
+                    let statusColorClass = 'text-gray-700';
+                    let statusTextDisplay = status ? ` ${status}` : '';
+
+                    if (percentage === 0) {
+                        statusColorClass = 'text-red-600';
+                        if (itemValue === '') {
+                           statusTextDisplay = ' ยังไม่เริ่ม';
+                        }
+                    } else if (percentage === 50) {
+                        statusColorClass = 'text-yellow-600';
+                    } else if (percentage === 75) {
+                        statusColorClass = 'text-blue-600';
+                    } else if (percentage === 100) {
+                        statusColorClass = 'text-green-600';
+                    } else if (percentage > 0 && percentage < 50) {
+                        statusColorClass = 'text-red-500';
+                    } else if (percentage > 50 && percentage < 75) {
+                        statusColorClass = 'text-orange-500';
+                    } else if (percentage > 75 && percentage < 100) {
+                        statusColorClass = 'text-teal-600';
+                    }
+                    
+                    const itemNameMatch = itemKey.match(/\((.*?)\)/);
+                    const actualItemName = itemNameMatch ? itemNameMatch[1].trim() : itemKey.trim(); 
+
+                    const itemContentSpan = document.createElement('span');
+                    itemContentSpan.className = `font-medium ${statusColorClass}`;
+                    itemContentSpan.textContent = `${actualItemName} (${percentage}%${statusTextDisplay})`;
+                    li.appendChild(itemContentSpan);
+                    
+                    if (specificSuggestion) { 
+                        const button = document.createElement('button');
+                        button.textContent = 'ดูข้อเสนอแนะ';
+                        button.className = 'view-suggestions-btn ml-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-md text-xs transition duration-300 shadow-sm';
+                        button.dataset.specificSuggestion = specificSuggestion; 
+                        li.appendChild(button);
+                    }
+                    ol.appendChild(li);
+                });
+                tdItemsList.appendChild(ol);
+                row.appendChild(tdItemsList);
+
+
+                // Column: ความสำเร็จ
+                const tdOverallPercentage = document.createElement('td');
+                tdOverallPercentage.className = 'py-3 px-6 text-center'; 
+                const avgPercentage = calculateAveragePercentage(rowData, allHeaders); 
+                tdOverallPercentage.innerHTML = `
+                    <div class="w-24 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto">
+                        <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${avgPercentage}%"></div>
+                    </div>
+                    <span class="text-sm font-medium text-gray-900">${avgPercentage}%</span>
+                `;
+                row.appendChild(tdOverallPercentage);
+
+                // Column: วันที่อัพเดต
+                const tdUpdateDate = document.createElement('td');
+                tdUpdateDate.className = 'py-3 px-6 whitespace-nowrap';
+                tdUpdateDate.textContent = rowData['วันที่อัพเดต'] || ''; 
+                row.appendChild(tdUpdateDate);
+
+                dataTableBody.appendChild(row);
+            });
+
+            attachSuggestionButtonListeners();
+        }
+
+        // Function to attach event listeners to suggestion buttons
+        function attachSuggestionButtonListeners() {
+            const viewSuggestionsButtons = document.querySelectorAll('.view-suggestions-btn');
+            viewSuggestionsButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const specificSuggestion = this.dataset.specificSuggestion;
+                    suggestionText.textContent = specificSuggestion;
+                    suggestionModal.style.display = 'flex';
+                });
+            });
+        }
+
+        // Modal functionality
+        const suggestionModal = document.getElementById('suggestionModal');
+        const suggestionText = document.getElementById('suggestionText');
+
+        function closeModal() {
+            suggestionModal.style.display = 'none';
+        }
+
+        // Close modal when clicking outside of the content
+        window.addEventListener('click', function(event) {
+            if (event.target === suggestionModal) {
+                closeModal();
+            }
+        });
+
+        // Search functionality
+        const globalSearchInput = document.getElementById('globalSearch'); // Combined search input
+
+        function filterAndRender() {
+            const searchTerm = globalSearchInput.value.toLowerCase();
+            
+            let filteredData = tableData.filter(row => {
+                const teacherName = row['ชื่อ-สกุล'] ? row['ชื่อ-สกุล'].toLowerCase() : '';
+                const projectName = row['โปรเจกต์'] ? row['โปรเจกต์'].toLowerCase() : '';
+                
+                // Check if the search term is found in either teacher name or project name
+                return teacherName.includes(searchTerm) || projectName.includes(searchTerm);
+            });
+
+            // Re-sort the filtered data before rendering
+            filteredData.sort((a, b) => {
+                const avgA = calculateAveragePercentage(a, tableHeaders);
+                const avgB = calculateAveragePercentage(b, tableHeaders);
+                return avgB - avgA;
+            });
+            renderTableRows(filteredData, tableHeaders);
+        }
+
+        globalSearchInput.addEventListener('keyup', filterAndRender); // Listen to the combined search input
+
+        // Initialize app on window load
+        window.onload = async function() {
+            try {
+                const response = await fetch(googleSheetUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const csvText = await response.text();
+                const { headers, data } = parseCSV(csvText); 
+                tableHeaders = headers; 
+                tableData = data;     
+                renderTableHeaders(tableHeaders); 
+                filterAndRender(); // Call filterAndRender to render initial data (which will be all data)
+            } catch (error) {
+                console.error('เกิดข้อผิดพลาดในการโหลดข้อมูลจาก Google Sheet:', error);
+                document.getElementById('dataTableBody').innerHTML = '<tr><td colspan="100%" class="text-center py-8 text-red-500">ไม่สามารถโหลดข้อมูลได้ โปรดตรวจสอบ URL ของ Google Sheet หรือโครงสร้างข้อมูลใน Sheet</td></tr>';
+            }
+        };
+    </script>
+</body>
+</html>
