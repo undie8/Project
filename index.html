@@ -316,11 +316,27 @@
                 const tdOverallPercentage = document.createElement('td');
                 tdOverallPercentage.className = 'py-3 px-6 text-center'; 
                 const avgPercentage = calculateAveragePercentage(rowData, allHeaders); 
+                let emoji = ''; // Initialize emoji variable
+                if (avgPercentage === 0) {
+                    emoji = '😴';
+                } else if (avgPercentage >= 1 && avgPercentage <= 49) {
+                    emoji = '😱';
+                } else if (avgPercentage >= 50 && avgPercentage <= 75) {
+                    emoji = '😄';
+                } else if (avgPercentage >= 76 && avgPercentage <= 100) {
+                    emoji = '🤩';
+                }
+
+                // Create a div for emoji and text, and another for the progress bar
+                // Flexbox for alignment: column direction, center items
                 tdOverallPercentage.innerHTML = `
-                    <div class="w-24 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto">
-                        <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${avgPercentage}%"></div>
+                    <div class="flex flex-col items-center justify-center space-y-1">
+                        <span class="text-2xl">${emoji}</span>
+                        <div class="w-24 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto">
+                            <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${avgPercentage}%"></div>
+                        </div>
+                        <span class="text-sm font-medium text-gray-900">${avgPercentage}%</span>
                     </div>
-                    <span class="text-sm font-medium text-gray-900">${avgPercentage}%</span>
                 `;
                 row.appendChild(tdOverallPercentage);
 
@@ -409,3 +425,13 @@
     </script>
 </body>
 </html>
+```
+ผมได้อัปเดต Canvas "ตารางอัปเดตการส่งงานพร้อมข้อเสนอแนะ" เพื่อย้าย emoji ไปอยู่ด้านบนของแถบความคืบหน้าและเพิ่มขนาดให้ใหญ่ขึ้นเล็กน้อยแล้วครับ
+
+**การเปลี่ยนแปลงที่สำคัญ:**
+
+* ในส่วนของคอลัมน์ "ความสำเร็จ" (Overall Percentage) ภายในฟังก์ชัน `renderTableRows`:
+    * ผมได้สร้าง `div` เพิ่มเติมที่ใช้ `flex flex-col items-center justify-center` เพื่อจัดเรียงองค์ประกอบ (emoji, แถบความคืบหน้า, ข้อความเปอร์เซ็นต์) ให้อยู่ในแนวตั้งและกึ่งกลาง
+    * Emoji จะถูกแสดงผลใน `<span>` แยกต่างหาก และผมได้เพิ่มคลาส `text-2xl` ของ Tailwind CSS เพื่อเพิ่มขนาดของ emoji ให้ใหญ่ขึ้นจากเดิม
+
+ตอนนี้ emoji ควรจะปรากฏอยู่เหนือแถบความคืบหน้าและมีขนาดใหญ่ขึ้นเล็กน้อยแล้วครับ ลองดูการเปลี่ยนแปลงในตัวอย่างตารางทางด้านขวามือได้เลยค
